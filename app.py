@@ -29,7 +29,14 @@ def load_csv_folder(folder_name):
 
 
 def safe_to_int(series):
-    return pd.to_numeric(series, errors="coerce").fillna(0).astype(int)
+    return (
+        series.astype(str)
+        .str.replace(",", "", regex=False)
+        .str.strip()
+        .pipe(pd.to_numeric, errors="coerce")
+        .fillna(0)
+        .astype(int)
+    )
 
 
 def safe_to_float(series):
@@ -43,6 +50,8 @@ topic_summary = load_csv_folder("topic_summary")
 recommendations = load_csv_folder("recommendations")
 polarity_scores = load_csv_folder("polarity_scores")
 lda_topics = load_csv_folder("lda_topics")
+positive_keywords = load_csv_folder("positive_keywords")
+negative_keywords = load_csv_folder("negative_keywords")
 
 
 st.sidebar.title("Dashboard Navigation")
@@ -51,7 +60,7 @@ page = st.sidebar.radio(
     "Select a page",
     [
         "Executive Overview",
-        "Sentiment Analysis",
+        "NLP and Sentiment Analysis",
         "Recommendations",
         "Business Insights"
     ]
@@ -63,7 +72,6 @@ if page == "Executive Overview":
 
     total_reviews = 0
     positive_reviews = 0
-    negative_reviews = 0
     positive_rate = 0
 
     if not sentiment_summary.empty and "review_count" in sentiment_summary.columns:
@@ -72,12 +80,7 @@ if page == "Executive Overview":
 
         if "sentiment" in sentiment_summary.columns:
             positive_reviews = sentiment_summary.loc[
-                sentiment_summary["sentiment"].str.lower() == "positive",
-                "review_count"
-            ].sum()
-
-            negative_reviews = sentiment_summary.loc[
-                sentiment_summary["sentiment"].str.lower() == "negative",
+                sentiment_summary["sentiment"].astype(str).str.lower() == "positive",
                 "review_count"
             ].sum()
 
@@ -100,44 +103,85 @@ if page == "Executive Overview":
     with st.expander("Overall Sentiment and Engagement Visuals", expanded=True):
         if not sentiment_summary.empty and not player_engagement.empty:
             player_engagement["review_count"] = safe_to_int(player_engagement["review_count"])
-            top_games = player_engagement.sort_values("review_count", ascending=False).head(10)
+            player_engagement["app_name"] = player_engagement["app_name"].astype(str)
+
+            top_games = (
+                player_engagement[
+                    (player_engagement["review_count"] > 0)
+                    & (player_engagement["app_name"].str.lower() != "none")
+                ]
+                .sort_values("review_count", ascending=False)
+                .head(10)
+            )
 
             col1, col2 = st.columns(2)
 
             with col1:
+                st.markdown("#### Overall Sentiment Distribution")
+
                 fig = px.pie(
                     sentiment_summary,
                     names="sentiment",
                     values="review_count",
-                    title="Positive vs Negative Review Distribution",
-                    hole=0.35
+                    hole=0.55
                 )
-                fig.update_layout(height=550, title_x=0.5)
+
+                fig.update_layout(
+                    height=520,
+                    title=None,
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.15,
+                        xanchor="center",
+                        x=0.5
+                    ),
+                    margin=dict(l=10, r=10, t=20, b=60)
+                )
+
                 st.plotly_chart(fig, use_container_width=True)
-                st.info("Most reviews are positive, suggesting strong overall player satisfaction.")
+
+                st.info(
+                    "Most reviews are positive, suggesting strong overall player satisfaction."
+                )
 
             with col2:
-                fig = px.bar(
-                    top_games,
-                    x="review_count",
-                    y="app_name",
-                    orientation="h",
-                    title="Top 10 Most Reviewed Games"
-                )
-                fig.update_layout(height=550, title_x=0.5, yaxis={"categoryorder": "total ascending"})
-                st.plotly_chart(fig, use_container_width=True)
-                st.info("The most reviewed games indicate where player engagement is strongest.")
+                st.markdown("#### Top 10 Most Reviewed Games")
+
+                if not top_games.empty:
+                    fig = px.bar(
+                        top_games,
+                        x="app_name",
+                        y="review_count"
+                    )
+
+                    fig.update_layout(
+                        height=520,
+                        xaxis_title="Game",
+                        yaxis_title="Review Count",
+                        margin=dict(l=40, r=30, t=20, b=120)
+                    )
+
+                    fig.update_xaxes(tickangle=-35)
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    st.info(
+                        "The most reviewed games indicate where player engagement is strongest."
+                    )
+                else:
+                    st.warning("Most reviewed games data is not available after cleaning.")
         else:
             st.info("Executive dashboard data is not fully available.")
 
 
-elif page == "Sentiment Analysis":
-    st.header("Sentiment Analysis")
+elif page == "NLP and Sentiment Analysis":
+    st.header("NLP and Sentiment Analysis")
 
     st.markdown(
         """
         This section explores player feedback using keyword analysis, discussion themes,
-        TextBlob polarity scoring, and LDA topic modeling.
+        TextBlob polarity scoring, positive and negative keyword extraction, and LDA topic modeling.
         """
     )
 
@@ -166,7 +210,13 @@ elif page == "Sentiment Analysis":
                 orientation="h",
                 title="Top Review Keywords After Removing Generic Terms"
             )
-            fig.update_layout(height=600, title_x=0.5, yaxis={"categoryorder": "total ascending"})
+
+            fig.update_layout(
+                height=600,
+                title_x=0.5,
+                yaxis=dict(categoryorder="total ascending")
+            )
+
             st.plotly_chart(fig, use_container_width=True)
 
             st.info(
@@ -186,7 +236,12 @@ elif page == "Sentiment Analysis":
                 orientation="h",
                 title="Most Common Discussion Topics"
             )
-            fig.update_layout(height=550, title_x=0.5)
+
+            fig.update_layout(
+                height=550,
+                title_x=0.5
+            )
+
             st.plotly_chart(fig, use_container_width=True)
 
             st.info(
@@ -205,7 +260,12 @@ elif page == "Sentiment Analysis":
                 nbins=50,
                 title="Review Polarity Score Distribution"
             )
-            fig.update_layout(height=550, title_x=0.5)
+
+            fig.update_layout(
+                height=550,
+                title_x=0.5
+            )
+
             st.plotly_chart(fig, use_container_width=True)
 
             if "textblob_sentiment" in polarity_scores.columns:
@@ -222,7 +282,12 @@ elif page == "Sentiment Analysis":
                     y="count",
                     title="TextBlob Sentiment Classification"
                 )
-                fig.update_layout(height=500, title_x=0.5)
+
+                fig.update_layout(
+                    height=500,
+                    title_x=0.5
+                )
+
                 st.plotly_chart(fig, use_container_width=True)
 
             st.info(
@@ -230,6 +295,77 @@ elif page == "Sentiment Analysis":
             )
         else:
             st.info("Polarity score data is not available.")
+
+    with st.expander("Positive and Negative Review Keywords", expanded=True):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("#### Top Positive Review Words")
+
+            if not positive_keywords.empty and "frequency" in positive_keywords.columns:
+                positive_keywords["frequency"] = safe_to_int(positive_keywords["frequency"])
+
+                top_positive = (
+                    positive_keywords
+                    .sort_values("frequency", ascending=False)
+                    .head(15)
+                )
+
+                fig = px.bar(
+                    top_positive,
+                    x="frequency",
+                    y="keyword",
+                    orientation="h",
+                    title="Most Common Positive Review Words"
+                )
+
+                fig.update_layout(
+                    height=500,
+                    title_x=0.5,
+                    yaxis=dict(categoryorder="total ascending")
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.info(
+                    "Positive review keywords highlight what players value most, such as fun, gameplay, story, and overall enjoyment."
+                )
+            else:
+                st.info("Positive keyword data is not available.")
+
+        with col2:
+            st.markdown("#### Top Negative Review Words")
+
+            if not negative_keywords.empty and "frequency" in negative_keywords.columns:
+                negative_keywords["frequency"] = safe_to_int(negative_keywords["frequency"])
+
+                top_negative = (
+                    negative_keywords
+                    .sort_values("frequency", ascending=False)
+                    .head(15)
+                )
+
+                fig = px.bar(
+                    top_negative,
+                    x="frequency",
+                    y="keyword",
+                    orientation="h",
+                    title="Most Common Negative Review Words"
+                )
+
+                fig.update_layout(
+                    height=500,
+                    title_x=0.5,
+                    yaxis=dict(categoryorder="total ascending")
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.info(
+                    "Negative review keywords reveal potential improvement areas, such as bugs, crashes, performance, server issues, and frustration points."
+                )
+            else:
+                st.info("Negative keyword data is not available.")
 
     with st.expander("LDA Topic Modeling Results", expanded=True):
         if not lda_topics.empty:
@@ -282,7 +418,13 @@ elif page == "Recommendations":
                     orientation="h",
                     title="Top Recommended Games"
                 )
-                fig.update_layout(height=550, title_x=0.5, yaxis={"categoryorder": "total ascending"})
+
+                fig.update_layout(
+                    height=550,
+                    title_x=0.5,
+                    yaxis=dict(categoryorder="total ascending")
+                )
+
                 st.plotly_chart(fig, use_container_width=True)
 
                 st.info(
