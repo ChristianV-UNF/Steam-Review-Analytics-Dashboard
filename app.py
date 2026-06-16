@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Steam Review Analytics Dashboard Lab Yu SING")
+st.title("Steam Review Analytics Dashboard")
 st.caption("NLP, Sentiment Analysis, Recommendation System, and Business Insights")
 
 DATA_DIR = Path("dashboard_data")
