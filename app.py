@@ -4,11 +4,11 @@ import plotly.express as px
 from pathlib import Path
 
 st.set_page_config(
-    page_title="Steam Review Analytics Dashboard Lab Yu SING",
+    page_title="Steam Review Analytics Dashboard",
     layout="wide"
 )
 
-st.title("Steam Review Analytics Dashboard")
+st.title("Steam Review Analytics Dashboard Lab Yu SING")
 st.caption("NLP, Sentiment Analysis, Recommendation System, and Business Insights")
 
 DATA_DIR = Path("dashboard_data")
