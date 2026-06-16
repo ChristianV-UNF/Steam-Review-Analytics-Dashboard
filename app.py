@@ -4,7 +4,7 @@ import plotly.express as px
 from pathlib import Path
 
 st.set_page_config(
-    page_title="Steam Review Analytics Dashboard",
+    page_title="Steam Review Analytics Dashboard Lab Yu SING",
     layout="wide"
 )
 
